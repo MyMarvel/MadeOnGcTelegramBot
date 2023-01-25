@@ -324,18 +324,15 @@ func sendCompletedWebsite(chatId int64, c *sequencedchat.Chat, bot *tgbotapi.Bot
 	// send as a file
 	filepath := os.Getenv("SCREENSHOTS_FOLDER") + "/" + c.ChatData["screen"].(string)
 	photo := tgbotapi.NewPhoto(chatId, tgbotapi.FilePath(filepath))
-	if _, err := bot.Send(photo); err != nil {
-		log.Fatal().Err(err)
-	}
 
-	// Send description
-	desc := fmt.Sprintf("%s\n%s", c.ChatData["desc"], c.ChatData["link"])
+	description := fmt.Sprintf("%s\n%s", c.ChatData["desc"], c.ChatData["link"])
 	dev, ok := c.ChatData["dev"]
 	if ok {
-		desc += fmt.Sprintf("\nРазработчик: @%s", dev.(string))
+		description += fmt.Sprintf("\n\nРазработчик: @%s", dev.(string))
 	}
-	msg := tgbotapi.NewMessage(chatId, desc)
-	if _, err := bot.Send(msg); err != nil {
-		log.Error().Err(err)
+	photo.Caption = description
+
+	if _, err := bot.Send(photo); err != nil {
+		log.Fatal().Err(err)
 	}
 }

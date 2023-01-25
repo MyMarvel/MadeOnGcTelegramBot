@@ -9,6 +9,11 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+const (
+	BUTTONS_KEYBOARD = 0
+	BUTTONS_INLINE   = 1
+)
+
 type Chat struct {
 	ChatId          int64
 	CurrentStage    string
@@ -21,6 +26,7 @@ type SequencedChat struct {
 	bot         *tgbotapi.BotAPI
 	activeChats sync.Map
 	logic       IChatLogic
+	buttonsType uint8
 }
 
 type LogicStep struct {
@@ -35,10 +41,11 @@ type IChatLogic interface {
 	GenerateAnswer(*Chat, string, *tgbotapi.BotAPI) LogicStep
 }
 
-func New(bot *tgbotapi.BotAPI, logic IChatLogic) *SequencedChat {
+func New(bot *tgbotapi.BotAPI, logic IChatLogic, buttonsType uint8) *SequencedChat {
 	return &SequencedChat{
-		bot:   bot,
-		logic: logic,
+		bot:         bot,
+		logic:       logic,
+		buttonsType: buttonsType,
 	}
 }
 
@@ -66,15 +73,27 @@ func (s *SequencedChat) generateAnswer(chatId int64, userInput string, fromUser 
 
 	step := s.logic.GenerateAnswer(&c, userInput, s.bot)
 	msg := tgbotapi.NewMessage(chatId, step.Text)
+	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 	if len(step.Buttons) > 0 {
 		// TODO: Add an ability to use multiple rows
-		btns := []tgbotapi.InlineKeyboardButton{}
-		for _, button := range step.Buttons {
-			btns = append(btns, tgbotapi.NewInlineKeyboardButtonData(button, button))
+		if s.buttonsType == BUTTONS_INLINE {
+			btns := []tgbotapi.InlineKeyboardButton{}
+			for _, button := range step.Buttons {
+				btns = append(btns, tgbotapi.NewInlineKeyboardButtonData(button, button))
+			}
+			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(btns...),
+			)
 		}
-		msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(btns...),
-		)
+		if s.buttonsType == BUTTONS_KEYBOARD {
+			btns := []tgbotapi.KeyboardButton{}
+			for _, button := range step.Buttons {
+				btns = append(btns, tgbotapi.NewKeyboardButton(button))
+			}
+			msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+				tgbotapi.NewKeyboardButtonRow(btns...),
+			)
+		}
 	}
 
 	c.CurrentStage = step.Id
