@@ -47,10 +47,12 @@ func (m StepsHandler) getCommandsStep(currentStep, userInput string) (bool, Logi
 		commandsList := m.StaticLogic[""] // All commands are stored under this first blank entry
 		stepName, commandExist := commandsList[userInput]
 		if !commandExist {
-			return true, LogicStep{
-				Id:   currentStep,
-				Text: m.WhenNotFoundText,
+			currStep, ok := m.getStep(stepName)
+			if !ok {
+				return true, m.developerError()
 			}
+			currStep.Text = m.WhenNotFoundText
+			return true, currStep
 		}
 		step, ok := m.getStep(stepName)
 		if !ok {
@@ -102,10 +104,12 @@ func (m StepsHandler) getNextStaticStep(prevStepName, userInput string) LogicSte
 	if !ok {
 		stepName, ok = m.StaticLogic[prevStepName]["any"]
 		if !ok {
-			return LogicStep{
-				Id:   prevStepName,
-				Text: m.WhenNotFoundText,
+			prStep, ok := m.getStep(prevStepName)
+			if !ok {
+				return m.developerError()
 			}
+			prStep.Text = m.WhenNotFoundText
+			return prStep
 		}
 	}
 	answer, ok := m.getStep(stepName)

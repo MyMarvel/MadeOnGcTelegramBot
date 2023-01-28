@@ -25,6 +25,7 @@ func main() {
 
 	updates := bot.GetUpdatesChan(u)
 	logic := madeongc.New()
+	go madeongc.Db.KeepAlive()
 	s := sequencedchat.New(bot, logic, sequencedchat.BUTTONS_KEYBOARD)
 
 	for update := range updates {

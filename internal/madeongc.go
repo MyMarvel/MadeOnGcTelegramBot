@@ -1,6 +1,7 @@
 package madeongc
 
 import (
+	"MyMarvel/MadeOnGcTelegramBot/internal/db"
 	"MyMarvel/MadeOnGcTelegramBot/pkg/sequencedchat"
 	"context"
 	"fmt"
@@ -24,19 +25,23 @@ type MadeOnGCLogic struct {
 	sequencedchat.StepsHandler
 }
 
+var Db db.Db
+
 // STAGE NAMES
 const (
-	START              = "Первый экран"
-	SEND_WEBSITE_LINK  = "Ждем ссылку на сайт"
-	SEND_WEBSITE_DESC  = "Ждем описание сайта"
-	FINISH             = "Последний экран"
-	IS_WEBSITE_YOURS   = "Вы автор?"
-	CONFIRM_OWNERSHIP  = "Ждем подтверждения авторства"
-	SHOW_PREVIEW       = "Готовим и показываем скриншот"
-	SEND_TO_MODERATION = "Отправить на модерирование"
-	EDIT_WARNING       = "Предупреждение что все сбросится"
-	OWNERSHIP_SUCCESS  = "Успешно проверили владение сайтом"
-	OWNERSHIP_FAILED   = "Мета тег не найден"
+	START                 = "Первый экран"
+	SEND_WEBSITE_LINK     = "Ждем ссылку на сайт"
+	SEND_WEBSITE_DESC     = "Ждем описание сайта"
+	FINISH                = "Последний экран"
+	IS_WEBSITE_YOURS      = "Вы автор?"
+	CONFIRM_OWNERSHIP     = "Ждем подтверждения авторства"
+	SHOW_PREVIEW          = "Готовим и показываем скриншот"
+	SEND_TO_MODERATION    = "Отправить на модерирование"
+	EDIT_WARNING          = "Предупреждение что все сбросится"
+	OWNERSHIP_SUCCESS     = "Успешно проверили владение сайтом"
+	OWNERSHIP_FAILED      = "Мета тег не найден"
+	SEND_SCREENSHOTS_DESC = "Ждем описания скриншотов"
+	ATTACH_SCREENSHOTS    = "Ждем прикрепления скриншотов дизайна"
 )
 
 // BUTTONS
@@ -52,21 +57,28 @@ const (
 	OWNER_READY_AGAIN  = "Исправлено"
 	OWNER_CANCEL_AGAIN = "Без авторства"
 	REDIRECT           = ""
+	BEGIN_WEBSITE      = "Готовый лендинг"
+	BEGIN_ONLY_SCREENS = "Скриншоты оформления"
 )
 
 func New() *MadeOnGCLogic {
+	Db = db.New()
 	staticLogic := map[string]map[string]string{
 		"": {
 			"/start": START,
 		},
 		START: {
-			"Начать": SEND_WEBSITE_LINK,
+			BEGIN_WEBSITE:      SEND_WEBSITE_LINK,
+			BEGIN_ONLY_SCREENS: SEND_SCREENSHOTS_DESC,
 		},
 		SEND_WEBSITE_LINK: {
 			"any": SEND_WEBSITE_DESC, //any is a reserved word for any input.
 		},
 		SEND_WEBSITE_DESC: {
 			"any": IS_WEBSITE_YOURS,
+		},
+		SEND_SCREENSHOTS_DESC: {
+			"any": ATTACH_SCREENSHOTS,
 		},
 		IS_WEBSITE_YOURS: {
 			YES: CONFIRM_OWNERSHIP,
@@ -94,6 +106,9 @@ func New() *MadeOnGCLogic {
 		OWNERSHIP_SUCCESS: {
 			REDIRECT: SHOW_PREVIEW,
 		},
+		ATTACH_SCREENSHOTS: {
+			"any": FINISH,
+		},
 		FINISH: {
 			"any": FINISH,
 		},
@@ -111,15 +126,18 @@ func New() *MadeOnGCLogic {
 
 После отправки наши модераторы проверят и опубликуют сайт в канале. 
 
-Нажмите «Начать» 👇
+Нажмите «Готовый лендинг» или «Скриншоты оформления» 👇
 `,
-			Buttons: []string{"Начать"},
+			Buttons: []string{BEGIN_WEBSITE, BEGIN_ONLY_SCREENS},
 		},
 		SEND_WEBSITE_LINK: {
 			Text: `Отправьте ссылку на сайт`,
 		},
 		SEND_WEBSITE_DESC: {
 			Text: `Напишите описание о сайте (не более 140 символов)`,
+		},
+		SEND_SCREENSHOTS_DESC: {
+			Text: `Напишите описание курса, для которого вы сделали оформление (не более 140 символов)`,
 		},
 		IS_WEBSITE_YOURS: {
 			Text: `Бот ушёл делать скриншот ⏳
@@ -152,6 +170,9 @@ func New() *MadeOnGCLogic {
 		},
 		FINISH: {
 			Text: "Спасибо!",
+		},
+		ATTACH_SCREENSHOTS: {
+			Text: "Предлагает отправить скриншоты страниц с оформлением",
 		},
 	}
 
@@ -198,6 +219,7 @@ var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbo
 		}
 
 	case SEND_WEBSITE_DESC == c.CurrentStage:
+	case SEND_SCREENSHOTS_DESC == c.CurrentStage:
 		if utf8.RuneCountInString(userInput) <= 140 {
 			c.ChatData["desc"] = userInput
 		} else {
@@ -216,6 +238,7 @@ var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbo
 		}
 
 		msg := tgbotapi.NewMessage(c.ChatId, "Подготавливаем предварительный просмотр ⏳")
+		msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 		if _, err := bot.Send(msg); err != nil {
 			log.Error().Err(err)
 		}
@@ -247,7 +270,10 @@ var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbo
 	case SHOW_PREVIEW == c.CurrentStage && userInput == SEND:
 		fallthrough
 	case EDIT_WARNING == c.CurrentStage && userInput == NO_EDIT_WARN:
-		// TODO: Save this to our database
+		err := Db.NewScreenshot(c.UserName, c.UserFName, c.UserLName, c.ChatData["link"].(string), c.ChatData["desc"].(string), c.ChatData["screen"].(string), isDeveloper(c.ChatData))
+		if err != nil {
+			log.Error().Err(err).Msg("cannot add a screenshot to database")
+		}
 		// Send it to our moderation bot
 		moderationChat, err := strconv.ParseInt(os.Getenv("MODERATION_CHAT_ID"), 10, 64)
 		if err != nil {
@@ -326,13 +352,17 @@ func sendCompletedWebsite(chatId int64, c *sequencedchat.Chat, bot *tgbotapi.Bot
 	photo := tgbotapi.NewPhoto(chatId, tgbotapi.FilePath(filepath))
 
 	description := fmt.Sprintf("%s\n%s", c.ChatData["desc"], c.ChatData["link"])
-	dev, ok := c.ChatData["dev"]
-	if ok {
-		description += fmt.Sprintf("\n\nРазработчик: @%s", dev.(string))
+	if isDeveloper(c.ChatData) {
+		description += fmt.Sprintf("\n\nРазработчик: @%s", c.ChatData["dev"].(string))
 	}
 	photo.Caption = description
 
 	if _, err := bot.Send(photo); err != nil {
 		log.Fatal().Err(err)
 	}
+}
+
+func isDeveloper(data map[string]interface{}) bool {
+	_, ok := data["dev"]
+	return ok
 }

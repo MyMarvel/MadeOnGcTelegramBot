@@ -19,6 +19,8 @@ type Chat struct {
 	CurrentStage    string
 	ChatData        map[string]interface{}
 	UserName        string
+	UserFName       string
+	UserLName       string
 	LastMessageDate time.Time
 }
 
@@ -65,9 +67,11 @@ func (s *SequencedChat) NewMessage(update tgbotapi.Update) {
 
 func (s *SequencedChat) generateAnswer(chatId int64, userInput string, fromUser *tgbotapi.User) {
 	cha, _ := s.activeChats.LoadOrStore(chatId, Chat{
-		ChatId:   chatId,
-		UserName: fromUser.UserName,
-		ChatData: make(map[string]interface{}),
+		ChatId:    chatId,
+		UserName:  fromUser.UserName,
+		UserFName: fromUser.FirstName,
+		UserLName: fromUser.LastName,
+		ChatData:  make(map[string]interface{}),
 	})
 	c := cha.(Chat)
 
