@@ -40,7 +40,7 @@ type LogicStep struct {
 }
 
 type IChatLogic interface {
-	GenerateAnswer(*Chat, string, *tgbotapi.BotAPI) LogicStep
+	GenerateAnswer(*Chat, string, *tgbotapi.BotAPI, *tgbotapi.Message) LogicStep
 }
 
 func New(bot *tgbotapi.BotAPI, logic IChatLogic, buttonsType uint8) *SequencedChat {
@@ -53,7 +53,7 @@ func New(bot *tgbotapi.BotAPI, logic IChatLogic, buttonsType uint8) *SequencedCh
 
 func (s *SequencedChat) NewMessage(update tgbotapi.Update) {
 	if update.Message != nil {
-		s.generateAnswer(update.Message.Chat.ID, update.Message.Text, update.Message.From)
+		s.generateAnswer(update.Message.Chat.ID, update.Message.Text, update.Message.From, update.Message)
 	} else if update.CallbackQuery != nil {
 		// Tell telegram we got the button click, it will show the button name in a nice gray popup for a few seconds
 		callback := tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data)
@@ -61,11 +61,11 @@ func (s *SequencedChat) NewMessage(update tgbotapi.Update) {
 			log.Error().Err(err)
 		}
 		// Write an answer into chat
-		s.generateAnswer(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data, update.CallbackQuery.From)
+		s.generateAnswer(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data, update.CallbackQuery.From, update.CallbackQuery.Message)
 	}
 }
 
-func (s *SequencedChat) generateAnswer(chatId int64, userInput string, fromUser *tgbotapi.User) {
+func (s *SequencedChat) generateAnswer(chatId int64, userInput string, fromUser *tgbotapi.User, message *tgbotapi.Message) {
 	cha, _ := s.activeChats.LoadOrStore(chatId, Chat{
 		ChatId:    chatId,
 		UserName:  fromUser.UserName,
@@ -75,7 +75,7 @@ func (s *SequencedChat) generateAnswer(chatId int64, userInput string, fromUser 
 	})
 	c := cha.(Chat)
 
-	step := s.logic.GenerateAnswer(&c, userInput, s.bot)
+	step := s.logic.GenerateAnswer(&c, userInput, s.bot, message)
 	msg := tgbotapi.NewMessage(chatId, step.Text)
 	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 	if len(step.Buttons) > 0 {
@@ -109,6 +109,6 @@ func (s *SequencedChat) generateAnswer(chatId int64, userInput string, fromUser 
 	}
 
 	if step.Redirect {
-		s.generateAnswer(chatId, "", fromUser)
+		s.generateAnswer(chatId, "", fromUser, message)
 	}
 }

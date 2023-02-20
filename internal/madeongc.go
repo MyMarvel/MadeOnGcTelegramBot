@@ -57,7 +57,7 @@ const (
 	OWNER_READY_AGAIN  = "Исправлено"
 	OWNER_CANCEL_AGAIN = "Без авторства"
 	REDIRECT           = ""
-	BEGIN_WEBSITE      = "Готовый лендинг"
+	BEGIN_WEBSITE      = "Начать"
 	BEGIN_ONLY_SCREENS = "Скриншоты оформления"
 )
 
@@ -68,8 +68,8 @@ func New() *MadeOnGCLogic {
 			"/start": START,
 		},
 		START: {
-			BEGIN_WEBSITE:      SEND_WEBSITE_LINK,
-			BEGIN_ONLY_SCREENS: SEND_SCREENSHOTS_DESC,
+			BEGIN_WEBSITE: SEND_WEBSITE_LINK,
+			//BEGIN_ONLY_SCREENS: SEND_SCREENSHOTS_DESC,
 		},
 		SEND_WEBSITE_LINK: {
 			"any": SEND_WEBSITE_DESC, //any is a reserved word for any input.
@@ -107,7 +107,7 @@ func New() *MadeOnGCLogic {
 			REDIRECT: SHOW_PREVIEW,
 		},
 		ATTACH_SCREENSHOTS: {
-			"any": FINISH,
+			"any": ATTACH_SCREENSHOTS,
 		},
 		FINISH: {
 			"any": FINISH,
@@ -126,9 +126,12 @@ func New() *MadeOnGCLogic {
 
 После отправки наши модераторы проверят и опубликуют сайт в канале. 
 
-Нажмите «Готовый лендинг» или «Скриншоты оформления» 👇
+Нажмите «Начать» 👇
 `,
-			Buttons: []string{BEGIN_WEBSITE, BEGIN_ONLY_SCREENS},
+			Buttons: []string{
+				BEGIN_WEBSITE,
+				//BEGIN_ONLY_SCREENS,
+			},
 		},
 		SEND_WEBSITE_LINK: {
 			Text: `Отправьте ссылку на сайт`,
@@ -172,7 +175,7 @@ func New() *MadeOnGCLogic {
 			Text: "Спасибо!",
 		},
 		ATTACH_SCREENSHOTS: {
-			Text: "Предлагает отправить скриншоты страниц с оформлением",
+			Text: `Blank message to be replaced`,
 		},
 	}
 
@@ -194,7 +197,7 @@ func New() *MadeOnGCLogic {
  * We can send multiple messages to chat and only then return some stage - in this case the stage message will appear in the end.
  * When we return empty overrideText (""), we'll use the default stage text from the steps map.
  */
-var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbotapi.BotAPI) (doOverride bool, newStepName string, overrideText string) {
+var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbotapi.BotAPI, message *tgbotapi.Message) (doOverride bool, newStepName string, overrideText string) {
 	theSameStepName := c.CurrentStage
 
 	switch true {
@@ -219,6 +222,7 @@ var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbo
 		}
 
 	case SEND_WEBSITE_DESC == c.CurrentStage:
+		fallthrough
 	case SEND_SCREENSHOTS_DESC == c.CurrentStage:
 		if utf8.RuneCountInString(userInput) <= 140 {
 			c.ChatData["desc"] = userInput
@@ -307,6 +311,26 @@ var dynamicStepActions = func(c *sequencedchat.Chat, userInput string, bot *tgbo
 		} else {
 			c.ChatData["dev"] = c.UserName
 		}
+
+	case CONFIRM_OWNERSHIP == c.CurrentStage && userInput == OWNER_READY:
+		fallthrough
+	case ATTACH_SCREENSHOTS == c.CurrentStage:
+		val, ok := c.ChatData["attach_cnt"]
+		cnt := 0
+		if !ok {
+			c.ChatData["attach_cnt"] = 0
+			c.ChatData["attach_list"] = make([]string, 0)
+		} else {
+			cnt = val.(int)
+		}
+		if len(message.Photo) > 0 {
+			cnt++
+			c.ChatData["attach_cnt"] = cnt
+			//photos_list := c.ChatData["attach_list"].([]string)
+			//list = append(list, photos_list)
+		}
+		msgText := strings.ReplaceAll("Пожалуйста, загрузите скриншоты страниц с оформлением (не более {X} штук)", "{X}", strconv.Itoa(10-cnt))
+		return true, theSameStepName, msgText
 	}
 
 	return

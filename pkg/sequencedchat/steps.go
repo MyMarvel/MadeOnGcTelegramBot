@@ -10,7 +10,7 @@ import (
 type StepsHandler struct {
 	StaticLogic        map[string]map[string]string
 	Steps              map[string]LogicStep
-	DynamicStepActions func(c *Chat, userInput string, bot *tgbotapi.BotAPI) (doOverride bool, newStepName string, overrideText string)
+	DynamicStepActions func(c *Chat, userInput string, bot *tgbotapi.BotAPI, message *tgbotapi.Message) (doOverride bool, newStepName string, overrideText string)
 	DeveloperErrorText string
 	WhenNotFoundText   string
 }
@@ -25,7 +25,7 @@ func (m StepsHandler) getStep(stepName string) (LogicStep, bool) {
 	return step, true
 }
 
-func (m StepsHandler) GenerateAnswer(c *Chat, userInput string, bot *tgbotapi.BotAPI) LogicStep {
+func (m StepsHandler) GenerateAnswer(c *Chat, userInput string, bot *tgbotapi.BotAPI, message *tgbotapi.Message) LogicStep {
 	log.Debug().Msgf("New request. prevStep: %q, userInput: %q", c.CurrentStage, userInput)
 
 	found, step := m.getCommandsStep(c.CurrentStage, userInput)
@@ -33,7 +33,7 @@ func (m StepsHandler) GenerateAnswer(c *Chat, userInput string, bot *tgbotapi.Bo
 		return step
 	}
 
-	override, step := m.getNextDynamicStep(c, userInput, bot)
+	override, step := m.getNextDynamicStep(c, userInput, bot, message)
 	if override {
 		return step
 	}
@@ -63,7 +63,7 @@ func (m StepsHandler) getCommandsStep(currentStep, userInput string) (bool, Logi
 	return false, LogicStep{}
 }
 
-func (m StepsHandler) getNextDynamicStep(c *Chat, userInput string, bot *tgbotapi.BotAPI) (bool, LogicStep) {
+func (m StepsHandler) getNextDynamicStep(c *Chat, userInput string, bot *tgbotapi.BotAPI, message *tgbotapi.Message) (bool, LogicStep) {
 	prevStepName := c.CurrentStage
 	if prevStepName != "" {
 		prevStep, ok := m.getStep(prevStepName)
@@ -71,7 +71,7 @@ func (m StepsHandler) getNextDynamicStep(c *Chat, userInput string, bot *tgbotap
 			return true, m.developerError()
 		}
 		// We can dynamically alter the step logic. In case doOverride is false, we'll use the static logic from 'staticLogic' variable
-		doOverride, overrideNextStep, overrideText := m.DynamicStepActions(c, userInput, bot)
+		doOverride, overrideNextStep, overrideText := m.DynamicStepActions(c, userInput, bot, message)
 		if doOverride {
 			if overrideNextStep == prevStepName {
 				if overrideText != "" {

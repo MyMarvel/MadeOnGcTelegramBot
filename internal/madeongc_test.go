@@ -18,7 +18,7 @@ func TestTakeScreenshot(t *testing.T) {
 			"desc": "some desc",
 		},
 	}
-	doOverride, newStepName, overrideText := dynamicStepActions(c, "Нет", &tgbotapi.BotAPI{})
+	doOverride, newStepName, overrideText := dynamicStepActions(c, "Нет", &tgbotapi.BotAPI{}, &tgbotapi.Message{})
 	if doOverride {
 		t.Errorf("doOverride should not be overriden, stage: %q", IS_WEBSITE_YOURS)
 	}
